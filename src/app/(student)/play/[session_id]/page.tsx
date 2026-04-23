@@ -163,8 +163,56 @@ export default function StudentPlayRoom() {
 
   // Init room data
   useEffect(() => {
-    initPlayRoom();
-  }, [sessionId]);  // Anti-cheat: hardened detection — tab switch, window blur, mouse leave, context menu, key shortcuts
+    const initPlayRoom = async () => {
+      const persistedSession = getPersistedLiveQuizSession(sessionId);
+      const uuid = localStorage.getItem("kahoot_device_uuid");
+      const fallbackParticipantId = persistedSession?.sessionId === sessionId ? persistedSession?.participantId : undefined;
+
+      if (!uuid && !fallbackParticipantId) {
+        router.push("/join");
+        return;
+      }
+
+      try {
+        const data = await fetchPlaySession(sessionId, uuid || "");
+
+        setSessionInfo(data.liveSession);
+        setSessionStatus(data.liveSession.status.toLowerCase() as any);
+        setCurrentQuestionIndex(data.liveSession.currentQuestionIndex ?? 0);
+        setIsTestMode(false); // testMode not in current schema
+        setQuestions(data.liveSession.quiz.questions);
+
+        const pData = data.participant;
+        setParticipantId(pData.id);
+        setParticipantName(pData.displayName || "Student");
+        setStreak(pData.streak || 0);
+
+        setPersistedLiveQuizSession({
+          participantId: pData.id,
+          sessionId,
+          gamePin: persistedSession?.gamePin || "",
+          nickname: pData.displayName || "Student",
+        });
+
+        // Banned check: treat high cheatFlags as a soft ban
+        if (pData.cheatFlags >= 10) {
+          router.push("/dashboard?error=banned");
+          return;
+        }
+      } catch (err) {
+        console.error("Initialization checks failed:", err);
+        clearPersistedLiveQuizSession();
+        router.push("/join");
+        return;
+      }
+
+      setLoading(false);
+    };
+
+    void initPlayRoom();
+  }, [router, sessionId, setCurrentQuestionIndex, setSessionStatus]);
+
+  // Anti-cheat: hardened detection — tab switch, window blur, mouse leave, context menu, key shortcuts
   useEffect(() => {
     if (!sessionId || !participantId || sessionStatus !== "active") return;
 
@@ -413,49 +461,6 @@ export default function StudentPlayRoom() {
 
     // Leaderboard is populated via Pusher real-time events; no direct DB fetch needed here.
   }, [sessionStatus, sessionId]);
-
-  const initPlayRoom = async () => {
-    const persistedSession = getPersistedLiveQuizSession(sessionId);
-    const uuid = localStorage.getItem("kahoot_device_uuid");
-    const fallbackParticipantId = persistedSession?.sessionId === sessionId ? persistedSession?.participantId : undefined;
-
-    if (!uuid && !fallbackParticipantId) { router.push("/join"); return; }
-
-    try {
-      const data = await fetchPlaySession(sessionId, uuid || "");
-      
-      setSessionInfo(data.liveSession);
-      setSessionStatus(data.liveSession.status.toLowerCase() as any);
-      setCurrentQuestionIndex(data.liveSession.currentQuestionIndex ?? 0);
-      setIsTestMode(false); // testMode not in current schema
-      setQuestions(data.liveSession.quiz.questions);
-      
-      const pData = data.participant;
-      setParticipantId(pData.id);
-      setParticipantName(pData.displayName || "Student");
-      setStreak(pData.streak || 0);
-
-      setPersistedLiveQuizSession({
-        participantId: pData.id,
-        sessionId,
-        gamePin: persistedSession?.gamePin || "",
-        nickname: pData.displayName || "Student",
-      });
-
-      // Banned check: treat high cheatFlags as a soft ban
-      if (pData.cheatFlags >= 10) {
-        router.push("/dashboard?error=banned");
-        return;
-      }
-    } catch (err) {
-      console.error("Initialization checks failed:", err);
-      clearPersistedLiveQuizSession();
-      router.push("/join");
-      return;
-    }
-
-    setLoading(false);
-  };
 
   const handleAnswerSubmit = async (optionIndices: number[], reactionMs: number) => {
     if (!participantId || !questions.length) return;

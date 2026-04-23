@@ -3,9 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "mysql"
-  url       = env("DATABASE_URL")
-  // Aiven requires SSL — sslaccept skips cert verification for managed cloud DBs
+  provider     = "mysql"
+  // url is configured in prisma.config.ts for Prisma v7
   relationMode = "prisma"
 }
 

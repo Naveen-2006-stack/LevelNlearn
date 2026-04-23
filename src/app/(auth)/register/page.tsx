@@ -9,6 +9,17 @@ import Image from "next/image";
 
 import { registerAction } from "@/actions/auth";
 
+const ALLOWED_EMAIL_DOMAIN = "@srmist.edu.in";
+
+function isAllowedCollegeEmail(email: string): boolean {
+  return email.trim().toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN);
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return "An error occurred during registration.";
+}
+
 function RegisterPageContent() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -22,13 +33,19 @@ function RegisterPageContent() {
     setLoading(true);
     setError("");
 
+    if (!isAllowedCollegeEmail(email)) {
+      setError("Use your college email ending with @srmist.edu.in.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const result = await registerAction(name, email, password);
       if (result.success) {
         router.push("/login?registered=true");
       }
-    } catch (error: any) {
-      setError(error.message || "An error occurred during registration.");
+    } catch (error: unknown) {
+      setError(getErrorMessage(error));
       setLoading(false);
     }
   };
@@ -89,9 +106,11 @@ function RegisterPageContent() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              pattern="^[A-Za-z0-9._%+-]+@srmist\.edu\.in$"
               className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              placeholder="teacher@school.edu"
+              placeholder="you@srmist.edu.in"
             />
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Only @srmist.edu.in emails are allowed.</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>

@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -42,6 +42,8 @@ interface ActiveQuestionCardProps {
   isTestMode?: boolean;
 }
 
+type ShuffledOption = { text: string; is_correct: boolean; originalIndex: number };
+
 export const ActiveQuestionCard = ({
   question,
   imageUrl = null,
@@ -60,8 +62,19 @@ export const ActiveQuestionCard = ({
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]); // highlighted but not yet submitted
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [shuffledOptions, setShuffledOptions] = useState<{ text: string; is_correct: boolean; originalIndex: number }[]>([]);
-  const startTimeRef = useRef(Date.now());
+  const [shuffledOptions, setShuffledOptions] = useState<ShuffledOption[]>([]);
+  const startTimeRef = useRef(0);
+
+  const handleConfirmSubmit = useCallback(async (overrideIdx?: number) => {
+    const indices = overrideIdx !== undefined ? [overrideIdx] : selectedIndices;
+    if (indices.length === 0 || hasSubmitted || submitting) return;
+    setSubmitting(true);
+    setHasSubmitted(true);
+    const reactionMs = Date.now() - startTimeRef.current;
+
+    await onAnswer(indices, reactionMs);
+    setSubmitting(false);
+  }, [hasSubmitted, onAnswer, selectedIndices, submitting]);
 
   // Reset state when the question changes
   useEffect(() => {
@@ -72,7 +85,11 @@ export const ActiveQuestionCard = ({
     startTimeRef.current = Date.now();
 
     // Options are now shuffled server-side via get_questions_for_student RPC
-    setShuffledOptions(options.map((opt, i) => ({ ...opt, originalIndex: i })) as any);
+    setShuffledOptions(options.map((opt, i) => ({
+      text: opt.text,
+      is_correct: !!opt.is_correct,
+      originalIndex: i,
+    })));
   }, [question, timeLimit, options]);
 
   // Countdown timer
@@ -83,14 +100,16 @@ export const ActiveQuestionCard = ({
         if (prev <= 1) {
           clearInterval(timer);
           // Auto-submit with -1 (time out) if nothing chosen
-          if (!hasSubmitted) handleConfirmSubmit(-1, true);
+          if (!hasSubmitted) {
+            void handleConfirmSubmit(-1);
+          }
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [hasSubmitted]);
+  }, [handleConfirmSubmit, hasSubmitted]);
 
   // If teacher reveals answer before student submits
   useEffect(() => {
@@ -98,19 +117,6 @@ export const ActiveQuestionCard = ({
       setHasSubmitted(true);
     }
   }, [isRevealed, hasSubmitted]);
-
-  const handleConfirmSubmit = async (overrideIdx?: number, timedOut?: boolean) => {
-    const indices = overrideIdx !== undefined ? [overrideIdx] : selectedIndices;
-    if (indices.length === 0 || hasSubmitted || submitting) return;
-    setSubmitting(true);
-    setHasSubmitted(true);
-    const reactionMs = Date.now() - startTimeRef.current;
-
-    await onAnswer(indices, reactionMs);
-    setSubmitting(false);
-  };
-
-  const currentSelectionIdx = selectedIndices.length ? selectedIndices[0] : null;
 
   // Use server-confirmed result (wasAnswerCorrect) when available; fall back to client-side is_correct
   const didAnswerCorrectly =
@@ -138,7 +144,7 @@ export const ActiveQuestionCard = ({
         zIndex: 100 // ensure it's above other elements
       });
     }
-  }, [showReveal, didAnswerCorrectly]);
+  }, [didAnswerCorrectly, isTestMode, showReveal]);
 
   return (
     <motion.div

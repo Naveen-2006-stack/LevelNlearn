@@ -4,6 +4,16 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 
+const ALLOWED_EMAIL_DOMAIN = "@srmist.edu.in"
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase()
+}
+
+function isAllowedCollegeEmail(email: string): boolean {
+  return normalizeEmail(email).endsWith(ALLOWED_EMAIL_DOMAIN)
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
   providers: [
@@ -16,8 +26,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
 
+        const normalizedEmail = normalizeEmail(credentials.email as string)
+        if (!isAllowedCollegeEmail(normalizedEmail)) return null
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email: normalizedEmail },
         })
 
         if (!user || !user.password) return null
@@ -35,6 +48,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   session: { strategy: "jwt" },
   callbacks: {
+    async signIn({ user }) {
+      if (!user?.email) return false
+      return isAllowedCollegeEmail(user.email)
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id

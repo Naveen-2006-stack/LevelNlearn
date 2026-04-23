@@ -3,6 +3,16 @@ import { useEffect } from 'react';
 import { pusherClient } from '@/lib/pusherClient';
 import { useGameStore, type SessionStatus } from '@/store/useGameStore';
 
+type ParticipantPayload = {
+  id: string;
+  display_name: string;
+  score: number;
+  streak: number;
+  cheat_flags: number;
+  last_active?: string;
+  is_banned?: boolean;
+};
+
 /**
  * useLiveSession — single hook that wires up ALL Pusher Realtime subscriptions
  * for a given quiz session. Combines session state + participant changes into one
@@ -33,11 +43,11 @@ export function useLiveSession(sessionId: string, role: 'teacher' | 'student') {
     });
 
     // --- Participant Events ---
-    channel.bind('participant-join', (data: any) => {
+    channel.bind('participant-join', (data: ParticipantPayload) => {
       updateParticipant(data);
     });
 
-    channel.bind('participant-update', (data: any) => {
+    channel.bind('participant-update', (data: ParticipantPayload) => {
       if (data.is_banned === true) {
         removeParticipant(data.id);
       } else {

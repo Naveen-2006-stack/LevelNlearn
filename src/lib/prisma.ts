@@ -15,6 +15,7 @@ export function getPrisma(): PrismaClient {
 // (called at request time, not module load time, so DATABASE_URL is available).
 export const prisma = new Proxy({} as PrismaClient, {
   get(_target, prop) {
-    return (getPrisma() as any)[prop];
+    const client = getPrisma() as unknown as Record<PropertyKey, unknown>;
+    return client[prop];
   },
 });
