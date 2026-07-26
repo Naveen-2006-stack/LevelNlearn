@@ -1,0 +1,1 @@
+const mysql = require('mysql2/promise'); async function run() { const pool = mysql.createPool({ host: 'localhost', port: 3307, user: 'root', password: '', database: 'levelnlearn' }); const [rows] = await pool.query('SELECT name, email, isGhost FROM User WHERE email = \'sa2392@srmist.edu.in\''); console.log(rows); process.exit(0); } run();  
