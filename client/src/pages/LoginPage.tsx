@@ -43,7 +43,13 @@ export default function LoginPage() {
           callback: handleCredentialResponse,
         });
         if (googleButtonRef.current) {
-          (window as any).google.accounts.id.renderButton(googleButtonRef.current, { theme: 'outline', size: 'large' });
+          (window as any).google.accounts.id.renderButton(googleButtonRef.current, {
+            theme: 'filled_black',
+            size: 'large',
+            shape: 'pill',
+            text: 'signin_with',
+            logo_alignment: 'left',
+          });
         }
       } catch (e) {
         console.error('GSI init error', e);
@@ -106,8 +112,10 @@ export default function LoginPage() {
         {googleClientId && (
           <div className="space-y-4 mb-6">
             <div className="flex flex-col items-center gap-4">
-              <div ref={googleButtonRef} />
-              <div className="text-sm text-slate-500">Continue with your Google account</div>
+              <div className="w-full max-w-sm rounded-2xl border border-slate-700/80 bg-slate-950/70 p-3 shadow-lg shadow-black/20 ring-1 ring-white/5">
+                <div ref={googleButtonRef} className="flex justify-center" />
+              </div>
+              <div className="text-sm text-slate-400">Continue with your Google account</div>
             </div>
           </div>
         )}
@@ -120,12 +128,6 @@ export default function LoginPage() {
 
         <div className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
           Sign in is handled only through Google.
-        </div>
-
-        <div className="mt-3 text-center text-sm">
-          <Link to="/forgot-password" className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">
-            Forgot password?
-          </Link>
         </div>
       </motion.div>
     </div>
