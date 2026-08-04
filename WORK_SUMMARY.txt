@@ -1,0 +1,52 @@
+ 
+ Phase 1 completed (Issue 10 - finalize submissions):
+ - Server:
+   - Added DB migration: `server/db/schema/12_add_studentresponse_unique.sql` to enforce uniqueness on `(sessionId, participantId, questionId)`.
+   - Updated `POST /api/sessions/:id/finish` in `server/src/routes/sessions.ts` to mark `LiveSession` as `FINISHED` and persist participant final scores — sets `Participant.status='SUBMITTED'`, `submittedAt=NOW()`, `finalScore=score` inside a transaction.
+   - Added `GET /api/sessions/:id/result` participant-facing endpoint returning their responses, final score, submittedAt and a small leaderboard.
+ 
+ - Client:
+   - Added `sessionApi.getResult` in `client/src/api/client.ts`.
+   - Implemented `StudentResultsPage` at `client/src/pages/StudentResultsPage.tsx` and registered route `/play/:sessionId/results` in `client/src/App.tsx`.
+   - Updated `client/src/pages/PlayPage.tsx` to call `/state` on init and redirect participants with `participantStatus === 'SUBMITTED'` to the results page.
+ 
+ Files created/modified in Phase 1:
+ - Created: `server/db/schema/12_add_studentresponse_unique.sql`
+ - Modified: `server/src/routes/sessions.ts` (finish, result endpoint and submit protections)
+ - Modified: `client/src/api/client.ts`
+ - Created: `client/src/pages/StudentResultsPage.tsx`
+ - Modified: `client/src/pages/PlayPage.tsx`
+ - Modified: `client/src/App.tsx`
+ 
+ Next steps (Phase 2):
+ - Run and apply SQL migrations in the target DB and regenerate Prisma client (if used).
+ - Add server-side tests for submit/finish/result flows (vitest + supertest).
+ - Continue with UNANIMOUS UI polishing, per-question timer editor, MULTI-select scoring updates, QR/report soft-delete, anti-cheat rebuild, security audit, and documentation.
+ 
+ If you'd like, I can now run the migrations against a local dev database (you must provide DB access or run the commands), add automated tests, and open a PR with these changes.
+
+Phase 2 (initial changes applied):
+- Server:
+  - Added multi-select scoring support in `server/src/services/scoring.ts` and wired `submit` to pass `questionType`.
+  - Enforced per-question time limits by persisting `LiveSession.currentQuestionStartedAt` and rejecting late submissions in `server/src/routes/sessions.ts`.
+  - Added soft-delete support for sessions (`deletedAt`) and updated listing and delete endpoints to soft-delete and exclude deleted sessions.
+  - Created migrations: `server/db/schema/12_add_studentresponse_unique.sql`, `server/db/schema/13_add_livesession_deletedat.sql`, `server/db/schema/14_add_currentquestion_startedat.sql`.
+
+- Client:
+  - Implemented `StudentResultsPage` and routing; PlayPage now redirects submitted participants to results.
+
+Files added/modified in Phase 2:
+- Modified: `server/src/services/scoring.ts`
+- Modified: `server/src/routes/sessions.ts`
+- Created: `server/db/schema/12_add_studentresponse_unique.sql`
+- Created: `server/db/schema/13_add_livesession_deletedat.sql`
+- Created: `server/db/schema/14_add_currentquestion_startedat.sql`
+- Modified: `client/src/pages/PlayPage.tsx`, `client/src/api/client.ts`, `client/src/App.tsx`
+
+Next actions I can take now:
+1. Run migrations and apply them to a development database (need DB access/credentials).
+2. Add unit and integration tests for the submit/finish/result/time-limit flows.
+3. Polish UNANIMOUS teacher UI and add server-side guards for race conditions.
+4. Rebuild anti-cheat module and add server-side rate-limits for suspicious activity.
+
+Which of these should I do next? If you want me to continue automatically, I'll start with running migrations (1) and then tests (2).

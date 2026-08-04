@@ -1,0 +1,17 @@
+-- =============================================================
+-- LevelNLearn – Database Setup Guide
+-- =============================================================
+--
+-- FILE ORDER TO RUN:
+--   1. 01_create_database.sql  → Creates the schema/database
+--   2. 02_tables.sql           → Creates all tables & constraints
+--   3. 03_indexes.sql          → Creates performance indexes
+--   4. 04_seed.sql             → Inserts sample data for testing
+--   5. 05_queries.sql          → Useful admin/debug queries
+--
+-- PowerShell command to run any file:
+--   Get-Content .\database\<filename>.sql | mysql -u root -p
+--
+-- To run all files in order (PowerShell):
+--   @("01_create_database.sql","02_tables.sql","03_indexes.sql","04_seed.sql") | ForEach-Object { Get-Content ".\database\$_" | mysql -u root -p }
+-- =============================================================

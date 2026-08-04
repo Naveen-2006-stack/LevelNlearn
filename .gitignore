@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# testing
+coverage/
+
+# production
+dist/
+build/
+
+# misc
+.DS_Store
+*.pem
+*.log
+
+# env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# typescript
+*.tsbuildinfo

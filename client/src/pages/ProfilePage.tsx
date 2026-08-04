@@ -1,0 +1,162 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, User, Mail, CreditCard } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
+import { authApi } from '../api/client';
+
+const avatarSeeds = ['Felix', 'Aneka', 'Oliver', 'Zoe', 'Leo', 'Mia', 'Max', 'Lily'];
+const getAvatarUrl = (seed: string) =>
+  `https://api.dicebear.com/7.x/adventurer/svg?seed=${seed}&backgroundColor=c0aede,b6e3f4`;
+
+export default function ProfilePage() {
+  const { user, updateUser } = useAuthStore();
+
+  const [displayName, setDisplayName] = useState(user?.name || '');
+  const [regNo, setRegNo] = useState(user?.regNo || '');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [selectedAvatar, setSelectedAvatar] = useState<string>(user?.image || getAvatarUrl(avatarSeeds[0]));
+
+  const initials = displayName
+    ? displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+    : '?';
+
+  const handleSave = async () => {
+    if (!displayName.trim()) return;
+    const normalizedRegNo = regNo.trim().toUpperCase();
+    if (normalizedRegNo && !/^RA[0-9]{13}$/.test(normalizedRegNo)) {
+      setSaveError('Registration number must be RA followed by 13 digits.');
+      return;
+    }
+    setSaveError(null);
+    setSaving(true);
+    try {
+      await authApi.updateProfile(displayName.trim(), selectedAvatar, normalizedRegNo || null);
+      updateUser({ name: displayName.trim(), image: selectedAvatar, regNo: normalizedRegNo || null });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch {
+      setSaveError('Could not save profile changes. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="max-w-xl mx-auto px-4 py-12">
+      <Link to="/dashboard" className="inline-flex items-center gap-2 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors mb-8 group">
+        <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+        Back to Dashboard
+      </Link>
+
+      <div className="bg-white dark:bg-slate-800 rounded-[2rem] shadow-xl shadow-slate-200/40 dark:shadow-none border border-gray-100 dark:border-white/5 overflow-hidden">
+        <div className="h-28 bg-gradient-to-br from-indigo-500 via-violet-500 to-purple-600" />
+        <div className="px-8 pb-8">
+          <div className="-mt-14 mb-6 w-24 h-24">
+            {selectedAvatar ? (
+              <img src={selectedAvatar} alt="Avatar" className="w-24 h-24 rounded-2xl object-cover ring-4 ring-white dark:ring-slate-800 shadow-xl" />
+            ) : (
+              <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-400 to-violet-600 flex items-center justify-center text-white text-3xl font-black ring-4 ring-white dark:ring-slate-800 shadow-xl">
+                {initials}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-semibold text-slate-600 dark:text-slate-400 mb-2">
+                <User size={14} className="inline mr-1.5" />Display Name
+              </label>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Your name..."
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-white/10 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all dark:text-white font-medium"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-600 dark:text-slate-400 mb-2">
+                <Mail size={14} className="inline mr-1.5" />Email Address
+              </label>
+              <input
+                type="email"
+                value={user?.email || ''}
+                readOnly
+                className="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-slate-900/50 border border-gray-200 dark:border-white/5 text-slate-500 dark:text-slate-500 font-medium cursor-not-allowed outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-600 dark:text-slate-400 mb-2">
+                <CreditCard size={14} className="inline mr-1.5" />Registration Number
+              </label>
+              <input
+                type="text"
+                value={regNo}
+                onChange={(e) => setRegNo(e.target.value.toUpperCase())}
+                maxLength={15}
+                placeholder="RA2211004050001"
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-white/10 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all dark:text-white font-mono uppercase"
+              />
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional: format `RA` + 13 digits</p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3">Choose Your Avatar</h3>
+              <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
+                {avatarSeeds.map((seed) => {
+                  const avatarOptionUrl = getAvatarUrl(seed);
+                  const isSelected = selectedAvatar === avatarOptionUrl;
+                  return (
+                    <button
+                      key={seed}
+                      type="button"
+                      onClick={() => setSelectedAvatar(avatarOptionUrl)}
+                      aria-label={`Select ${seed} avatar`}
+                      className={`rounded-xl transition-transform hover:scale-110 focus:outline-none ${
+                        isSelected
+                          ? 'ring-4 ring-indigo-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-800'
+                          : 'ring-2 ring-transparent'
+                      }`}
+                    >
+                      <img src={avatarOptionUrl} alt={`${seed} avatar`} className="w-full aspect-square rounded-xl object-cover border border-slate-200 dark:border-slate-700 bg-white" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleSave}
+              disabled={saving || !displayName.trim()}
+              className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-base shadow-lg shadow-indigo-600/20 transition-all"
+            >
+              {saving ? 'Saving…' : saved ? '✓ Saved!' : 'Save Changes'}
+            </motion.button>
+
+            {saveError && <p className="text-center text-sm font-semibold text-rose-500">{saveError}</p>}
+
+            <AnimatePresence>
+              {saved && (
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="text-center text-sm font-semibold text-emerald-500"
+                >
+                  Your profile has been updated!
+                </motion.p>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
