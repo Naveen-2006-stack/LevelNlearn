@@ -16,15 +16,24 @@ import { errorHandler } from './middleware/errorHandler.js';
 dotenv.config();
 
 // ── Startup environment validation ──────────────────────────────────────────
-const REQUIRED_ENV = ['JWT_SECRET', 'DB_HOST', 'DB_USER', 'DB_NAME', 'PUSHER_APP_ID', 'PUSHER_KEY', 'PUSHER_SECRET'];
+const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
+const hasDatabaseConfig = Boolean(process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME);
+const REQUIRED_ENV = ['JWT_SECRET', 'PUSHER_APP_ID', 'PUSHER_KEY', 'PUSHER_SECRET'];
 const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
+if (!hasDatabaseUrl && !hasDatabaseConfig) {
+  missingEnv.push('DATABASE_URL or DB_HOST/DB_USER/DB_NAME');
+}
 if (missingEnv.length > 0) {
   console.error(`[startup] FATAL: Missing env vars: ${missingEnv.join(', ')}`);
-  process.exit(1);
+  if (!process.env.VERCEL) {
+    process.exit(1);
+  }
 }
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   console.error('[startup] FATAL: JWT_SECRET must be at least 32 characters long.');
-  process.exit(1);
+  if (!process.env.VERCEL) {
+    process.exit(1);
+  }
 }
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -104,6 +113,12 @@ app.use('/api/sessions', sessionsRouter);
 app.use('/api/pusher', pusherRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/feedback', feedbackRouter);
+
+app.get('/api/public-config', (_req, res) => {
+  res.json({
+    googleClientId: process.env.GOOGLE_CLIENT_ID || null,
+  });
+});
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, env: isDev ? 'development' : 'production' }));
 

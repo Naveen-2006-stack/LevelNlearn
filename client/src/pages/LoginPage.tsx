@@ -1,16 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { authApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import LogoMark from '../components/LogoMark';
+import { useGoogleClientId } from '../hooks/useGoogleClientId';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -19,7 +17,7 @@ export default function LoginPage() {
   const requestedNext = searchParams.get('next') ?? '/dashboard';
   const safeNext = requestedNext.startsWith('/') ? requestedNext : '/dashboard';
 
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+  const googleClientId = useGoogleClientId();
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -58,28 +56,12 @@ export default function LoginPage() {
       setError('Google sign-in failed');
       return;
     }
-    setLoading(true);
     try {
       const res = await authApi.loginWithGoogle(response.credential);
       login(res.data.token, res.data.user as Parameters<typeof login>[1]);
       navigate(safeNext, { replace: true });
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Google sign-in failed');
-      setLoading(false);
-    }
-  }
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const res = await authApi.login(email, password);
-      login(res.data.token, res.data.user as Parameters<typeof login>[1]);
-      navigate(safeNext, { replace: true });
-    } catch (err: any) {
-      setError(err?.response?.data?.error || 'Login failed. Please check your credentials.');
-      setLoading(false);
     }
   }
 
@@ -125,60 +107,19 @@ export default function LoginPage() {
           <div className="space-y-4 mb-6">
             <div className="flex flex-col items-center gap-4">
               <div ref={googleButtonRef} />
-              <div className="text-sm text-slate-500">Or use your Google account to sign in</div>
-            </div>
-            <div className="relative flex py-2 items-center">
-              <div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
-              <span className="flex-shrink mx-4 text-slate-400 text-xs uppercase tracking-wider">or sign in with email</span>
-              <div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+              <div className="text-sm text-slate-500">Continue with your Google account</div>
             </div>
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email Address</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              placeholder="you@example.com"
-            />
+        {!googleClientId && (
+          <div className="p-4 bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20 rounded-xl mb-6 text-sm font-semibold text-center">
+            Google sign-in is not configured on this deployment yet.
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            disabled={loading}
-            type="submit"
-            className="w-full py-4 px-6 bg-indigo-600 text-white rounded-xl font-bold text-lg shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-4 disabled:opacity-50"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="animate-spin" /> Signing In...
-              </>
-            ) : (
-              'Sign In'
-            )}
-          </motion.button>
-        </form>
+        )}
 
         <div className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
-          Don&apos;t have an account?{' '}
-          <Link to="/register" className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">Register here</Link>
+          Sign in is handled only through Google.
         </div>
 
         <div className="mt-3 text-center text-sm">
