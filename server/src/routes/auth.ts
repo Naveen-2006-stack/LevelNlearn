@@ -54,30 +54,27 @@ function clearLoginFailures(key: string): void {
 }
 
 async function findUserByEmail(email: string): Promise<DbUser | null> {
-  const [rows] = await pool.query<any[]>(
-    'SELECT id, name, email, regNo, password, role, image, isGhost, emailVerified, verificationToken, verificationTokenExpiry, resetToken, resetTokenExpiry, passwordChangedAt FROM User WHERE email = ?',
+  const [rows] = await pool.query<DbUser>(
+    'SELECT id, name, email, regNo, password, role, image, emailVerified, verificationToken, verificationTokenExpiry, resetToken, resetTokenExpiry, passwordChangedAt FROM User WHERE email = ?',
     [email]
   );
-  const users = rows as DbUser[];
-  return users[0] || null;
+  return rows[0] || null;
 }
 
 async function findUserByVerificationToken(token: string): Promise<DbUser | null> {
-  const [rows] = await pool.query<any[]>(
-    'SELECT id, name, email, regNo, password, role, image, isGhost, emailVerified, verificationToken, verificationTokenExpiry FROM User WHERE verificationToken = ?',
+  const [rows] = await pool.query<DbUser>(
+    'SELECT id, name, email, regNo, password, role, image, emailVerified, verificationToken, verificationTokenExpiry FROM User WHERE verificationToken = ?',
     [token]
   );
-  const users = rows as DbUser[];
-  return users[0] || null;
+  return rows[0] || null;
 }
 
 async function findUserByResetToken(token: string): Promise<DbUser | null> {
-  const [rows] = await pool.query<any[]>(
-    'SELECT id, name, email, regNo, password, role, image, isGhost, emailVerified, resetToken, resetTokenExpiry, passwordChangedAt FROM User WHERE resetToken = ?',
+  const [rows] = await pool.query<DbUser>(
+    'SELECT id, name, email, regNo, password, role, image, emailVerified, resetToken, resetTokenExpiry, passwordChangedAt FROM User WHERE resetToken = ?',
     [token]
   );
-  const users = rows as DbUser[];
-  return users[0] || null;
+  return rows[0] || null;
 }
 
 const RegisterSchema = z.object({
@@ -324,14 +321,14 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     clearLoginFailures(attemptKey);
 
     const token = jwt.sign(
-      { userId: user.id, role: user.role, name: user.name, email: user.email, image: user.image, isGhost: user.isGhost, regNo: user.regNo || null },
+      { userId: user.id, role: user.role, name: user.name, email: user.email, image: user.image, regNo: user.regNo || null },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
 
     res.json({
       token,
-      user: { id: user.id, name: user.name, email: user.email, regNo: user.regNo || null, role: user.role, image: user.image, isGhost: Boolean(user.isGhost) },
+      user: { id: user.id, name: user.name, email: user.email, regNo: user.regNo || null, role: user.role, image: user.image, isGhost: false },
     });
   } catch (error) {
     console.error('[Login] Error:', error);
@@ -344,17 +341,16 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 // ─────────────────────────────────────────────────────────────
 router.get('/me', requireAuth, async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
-  const [rows] = await pool.query<any[]>(
-    'SELECT id, name, email, regNo, role, image, isGhost FROM User WHERE id = ?',
+  const [rows] = await pool.query<Pick<DbUser, 'id' | 'name' | 'email' | 'regNo' | 'role' | 'image'>>(
+    'SELECT id, name, email, regNo, role, image FROM User WHERE id = ?',
     [userId]
   );
-  const users = rows as DbUser[];
-  if (users.length === 0) {
+  if (rows.length === 0) {
     res.status(404).json({ error: 'User not found' });
     return;
   }
-  const u = users[0];
-  res.json({ id: u.id, name: u.name, email: u.email, regNo: u.regNo || null, role: u.role, image: u.image, isGhost: Boolean(u.isGhost) });
+  const u = rows[0];
+  res.json({ id: u.id, name: u.name, email: u.email, regNo: u.regNo || null, role: u.role, image: u.image, isGhost: false });
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -524,12 +520,12 @@ router.post('/google', async (req: Request, res: Response): Promise<void> => {
     }
 
     const token = jwt.sign(
-      { userId: user.id, role: user.role, name: user.name, email: user.email, image: user.image, isGhost: user.isGhost, regNo: user.regNo || null },
+      { userId: user.id, role: user.role, name: user.name, email: user.email, image: user.image, regNo: user.regNo || null },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
 
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email, regNo: user.regNo || null, role: user.role, image: user.image, isGhost: Boolean(user.isGhost) } });
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, regNo: user.regNo || null, role: user.role, image: user.image, isGhost: false } });
   } catch (error) {
     console.error('[Google Sign-In] Error:', error);
     res.status(500).json({ error: 'Google sign-in failed' });

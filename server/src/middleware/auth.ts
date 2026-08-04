@@ -19,7 +19,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload;
     
     // Check if password was changed after token was issued
-    const [rows] = await pool.query<any[]>(
+    const [rows] = await pool.query<{ passwordChangedAt: Date | string | null }>(
       'SELECT passwordChangedAt FROM User WHERE id = ?',
       [decoded.userId]
     );

@@ -86,12 +86,12 @@ router.post('/', async (req: Request, res: Response) => {
 // Get quiz with questions
 router.get('/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const [quizRows] = await pool.query<any[]>('SELECT * FROM Quiz WHERE id = ?', [id]);
-  if ((quizRows as any[]).length === 0) {
+  const [quizRows] = await pool.query<DbQuiz>('SELECT * FROM Quiz WHERE id = ?', [id]);
+  if (quizRows.length === 0) {
     res.status(404).json({ error: 'Quiz not found' });
     return;
   }
-  const quiz = (quizRows as DbQuiz[])[0];
+  const quiz = quizRows[0];
 
   if (quiz.teacherId !== req.user!.userId) {
     res.status(403).json({ error: 'Unauthorized' });

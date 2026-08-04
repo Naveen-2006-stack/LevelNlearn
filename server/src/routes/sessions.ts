@@ -235,15 +235,15 @@ router.post('/:id/join', async (req: Request, res: Response) => {
   if (!parsed.success) { res.status(400).json({ error: 'Invalid body' }); return; }
 
   const { joinCode, displayName, regNo, deviceUuid, consentAt } = parsed.data;
-  const [rows] = await pool.query<any[]>(
+  const [rows] = await pool.query<DbLiveSession>(
     'SELECT * FROM LiveSession WHERE joinCode = ?',
     [joinCode.toUpperCase()]
   );
-  if ((rows as any[]).length === 0) { res.status(404).json({ error: 'Invalid room code' }); return; }
-  const session = (rows as DbLiveSession[])[0];
+  if (rows.length === 0) { res.status(404).json({ error: 'Invalid room code' }); return; }
+  const session = rows[0];
   if (session.status === 'FINISHED') { res.status(400).json({ error: 'Session has already ended' }); return; }
 
-  const [existing] = await pool.query<any[]>(
+  const [existing] = await pool.query<DbParticipant>(
     'SELECT * FROM Participant WHERE sessionId = ? AND deviceUuid = ?',
     [session.id, deviceUuid]
   );
@@ -252,21 +252,21 @@ router.post('/:id/join', async (req: Request, res: Response) => {
   const consentDate = consentAt ? new Date(consentAt) : null;
   const normalizedRegNo = regNo?.trim().toUpperCase() || null;
 
-  if ((existing as any[]).length > 0) {
+  if (existing.length > 0) {
     await pool.query(
       'UPDATE Participant SET displayName = ?, regNo = ?, lastActive = NOW(), consentAt = ? WHERE id = ?',
-      [displayName, normalizedRegNo, consentDate, (existing as any[])[0].id]
+      [displayName, normalizedRegNo, consentDate, existing[0].id]
     );
-    const [updated] = await pool.query<any[]>('SELECT * FROM Participant WHERE id = ?', [(existing as any[])[0].id]);
-    participant = (updated as any[])[0] as DbParticipant;
+    const [updated] = await pool.query<DbParticipant>('SELECT * FROM Participant WHERE id = ?', [existing[0].id]);
+    participant = updated[0];
   } else {
     const pId = uuidv4();
     await pool.query(
       'INSERT INTO Participant (id, sessionId, deviceUuid, displayName, regNo, consentAt) VALUES (?, ?, ?, ?, ?, ?)',
       [pId, session.id, deviceUuid, displayName, normalizedRegNo, consentDate]
     );
-    const [inserted] = await pool.query<any[]>('SELECT * FROM Participant WHERE id = ?', [pId]);
-    participant = (inserted as any[])[0] as DbParticipant;
+    const [inserted] = await pool.query<DbParticipant>('SELECT * FROM Participant WHERE id = ?', [pId]);
+    participant = inserted[0];
   }
 
   await triggerEvent(`session-${session.id}`, 'participant-join', {
@@ -283,25 +283,25 @@ router.get('/:id/play-data', async (req: Request, res: Response) => {
   const { id } = req.params;
   const { deviceUuid } = req.query as { deviceUuid: string };
 
-  const [sessionRows] = await pool.query<any[]>(
+  const [sessionRows] = await pool.query<any>(
     `SELECT ls.*, q.title AS quizTitle FROM LiveSession ls JOIN Quiz q ON q.id = ls.quizId WHERE ls.id = ?`,
     [id]
   );
-  if ((sessionRows as any[]).length === 0) { res.status(404).json({ error: 'Session not found' }); return; }
-  const session = (sessionRows as any[])[0];
+  if (sessionRows.length === 0) { res.status(404).json({ error: 'Session not found' }); return; }
+  const session = sessionRows[0];
 
-  const [pRows] = await pool.query<any[]>(
+  const [pRows] = await pool.query<DbParticipant>(
     'SELECT * FROM Participant WHERE sessionId = ? AND deviceUuid = ?',
     [id, deviceUuid]
   );
-  if ((pRows as any[]).length === 0) { res.status(404).json({ error: 'Participant not found' }); return; }
-  const participant = (pRows as any[])[0];
+  if (pRows.length === 0) { res.status(404).json({ error: 'Participant not found' }); return; }
+  const participant = pRows[0];
 
-  const [qRows] = await pool.query<any[]>(
+  const [qRows] = await pool.query<any>(
     'SELECT * FROM Question WHERE quizId = ? ORDER BY orderIndex ASC',
     [session.quizId]
   );
-  const questions = (qRows as any[]).map((q) => ({
+  const questions = qRows.map((q) => ({
     id: q.id, questionText: q.questionText, question_text: q.questionText,
     questionType: q.questionType, question_type: q.questionType,
     options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options,
@@ -336,15 +336,15 @@ router.get('/:id/play-data', async (req: Request, res: Response) => {
 // POST /api/sessions/:id/start
 router.post('/:id/start', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const [rows] = await pool.query<any[]>('SELECT teacherId, quizId, timedScoring FROM LiveSession WHERE id = ?', [id]);
-  if ((rows as any[]).length === 0 || (rows as any[])[0].teacherId !== req.user!.userId) {
+  const [rows] = await pool.query<DbLiveSession & { timedScoring: number }>('SELECT teacherId, quizId, timedScoring FROM LiveSession WHERE id = ?', [id]);
+  if (rows.length === 0 || rows[0].teacherId !== req.user!.userId) {
     res.status(403).json({ error: 'Unauthorized' }); return;
   }
   await pool.query(
     "UPDATE LiveSession SET status='ACTIVE', startedAt=NOW() WHERE id = ?",
     [id]
   );
-  const timedScoring = (rows as any[])[0].timedScoring !== 0;
+  const timedScoring = rows[0].timedScoring !== 0;
   await triggerEvent(`session-${id}`, 'session-update', { status: 'ACTIVE', timedScoring });
   res.json({ success: true });
 });
@@ -356,11 +356,11 @@ router.post('/:id/next', async (req: Request, res: Response) => {
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid body' }); return; }
 
-  const [rows] = await pool.query<any[]>('SELECT teacherId, quizId, timedScoring FROM LiveSession WHERE id = ?', [id]);
-  if ((rows as any[]).length === 0 || (rows as any[])[0].teacherId !== req.user!.userId) {
+  const [rows] = await pool.query<DbLiveSession & { timedScoring: number }>('SELECT teacherId, quizId, timedScoring FROM LiveSession WHERE id = ?', [id]);
+  if (rows.length === 0 || rows[0].teacherId !== req.user!.userId) {
     res.status(403).json({ error: 'Unauthorized' }); return;
   }
-  const timedScoring = (rows as any[])[0].timedScoring !== 0;
+  const timedScoring = rows[0].timedScoring !== 0;
 
   const { nextQuestionIndex, isLast } = parsed.data;
 
@@ -373,8 +373,8 @@ router.post('/:id/next', async (req: Request, res: Response) => {
       await triggerEvent(`session-${id}`, 'session-update', { status: 'FINISHED' });
     } else {
       // fetch the question's time limit for the next question
-      const [qRow] = await pool.query<any[]>('SELECT timeLimit FROM Question WHERE quizId = ? ORDER BY orderIndex ASC LIMIT 1 OFFSET ?', [rows[0].quizId, nextQuestionIndex]);
-      const timeLimitVal = (qRow as any[])[0]?.timeLimit ?? 30;
+      const [qRow] = await pool.query<{ timeLimit: number }>('SELECT timeLimit FROM Question WHERE quizId = ? ORDER BY orderIndex ASC LIMIT 1 OFFSET ?', [rows[0].quizId, nextQuestionIndex]);
+      const timeLimitVal = qRow[0]?.timeLimit ?? 30;
 
       const startedAt = new Date();
       await pool.query('UPDATE LiveSession SET currentQuestionIndex = ?, currentQuestionStartedAt = ? WHERE id = ?', [nextQuestionIndex, startedAt, id]);
