@@ -33,6 +33,75 @@ function generateSecureToken(): string {
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+
+type SupabaseGoogleUser = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  regNo: string | null;
+  role: 'TEACHER' | 'STUDENT' | 'ADMIN';
+  image: string | null;
+  emailVerified: string | null;
+};
+
+function hasSupabaseRestConfig(): boolean {
+  return SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0;
+}
+
+async function supabaseRest<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!hasSupabaseRestConfig()) {
+    throw new Error('SUPABASE_URL and SUPABASE_ANON_KEY must be set for Google sign-in.');
+  }
+
+  const response = await fetch(`${SUPABASE_URL}${path}`, {
+    ...init,
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(init?.headers || {}),
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Supabase REST ${response.status}: ${text}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function findGoogleUserByEmail(email: string): Promise<SupabaseGoogleUser | null> {
+  const rows = await supabaseRest<SupabaseGoogleUser[]>(
+    `/rest/v1/User?email=eq.${encodeURIComponent(email)}&select=id,name,email,regNo,role,image,emailVerified`
+  );
+  return rows[0] || null;
+}
+
+async function createGoogleUser(input: { id: string; name: string; email: string; image: string | null }): Promise<SupabaseGoogleUser> {
+  const rows = await supabaseRest<SupabaseGoogleUser[]>(`/rest/v1/User`, {
+    method: 'POST',
+    headers: {
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify({
+      id: input.id,
+      name: input.name,
+      email: input.email,
+      role: 'STUDENT',
+      image: input.image,
+      emailVerified: new Date().toISOString(),
+    }),
+  });
+  const user = rows[0];
+  if (!user) {
+    throw new Error('Supabase did not return the created user.');
+  }
+  return user;
+}
 
 function loginKey(ip: string | undefined, email: string): string {
   return `${ip || 'unknown'}:${email.toLowerCase()}`;
@@ -510,22 +579,17 @@ router.post('/google', async (req: Request, res: Response): Promise<void> => {
     const name = String(payload.name || payload.email.split('@')[0]);
     const image = payload.picture || null;
 
-    // Find or create user
-    let user = await findUserByEmail(email);
+    // Find or create user through Supabase REST
+    let user = await findGoogleUserByEmail(email);
     if (!user) {
       const id = uuidv4();
-      // Create user and mark email as verified
       try {
-        await pool.query(
-          'INSERT INTO User (id, name, email, role, image, emailVerified) VALUES (?, ?, ?, ?, ?, ?)',
-          [id, name, email, 'STUDENT', image, new Date()]
-        );
+        user = await createGoogleUser({ id, name, email, image });
       } catch (insertError) {
         console.error('[Google Sign-In] User insert error:', insertError);
         res.status(500).json({ error: 'Google sign-in failed while creating the user record.' });
         return;
       }
-      user = await findUserByEmail(email);
     }
 
     if (!user) {
