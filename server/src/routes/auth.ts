@@ -55,7 +55,7 @@ function clearLoginFailures(key: string): void {
 
 async function findUserByEmail(email: string): Promise<DbUser | null> {
   const [rows] = await pool.query<DbUser>(
-    'SELECT id, name, email, regNo, password, role, image, emailVerified, verificationToken, verificationTokenExpiry, resetToken, resetTokenExpiry, passwordChangedAt FROM User WHERE email = ?',
+    'SELECT id, name, email, password, role, image, emailVerified FROM User WHERE email = ?',
     [email]
   );
   return rows[0] || null;
@@ -63,7 +63,7 @@ async function findUserByEmail(email: string): Promise<DbUser | null> {
 
 async function findUserByVerificationToken(token: string): Promise<DbUser | null> {
   const [rows] = await pool.query<DbUser>(
-    'SELECT id, name, email, regNo, password, role, image, emailVerified, verificationToken, verificationTokenExpiry FROM User WHERE verificationToken = ?',
+    'SELECT id, name, email, password, role, image, emailVerified FROM User WHERE email = ?',
     [token]
   );
   return rows[0] || null;
@@ -71,7 +71,7 @@ async function findUserByVerificationToken(token: string): Promise<DbUser | null
 
 async function findUserByResetToken(token: string): Promise<DbUser | null> {
   const [rows] = await pool.query<DbUser>(
-    'SELECT id, name, email, regNo, password, role, image, emailVerified, resetToken, resetTokenExpiry, passwordChangedAt FROM User WHERE resetToken = ?',
+    'SELECT id, name, email, password, role, image, emailVerified FROM User WHERE email = ?',
     [token]
   );
   return rows[0] || null;
@@ -321,14 +321,14 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     clearLoginFailures(attemptKey);
 
     const token = jwt.sign(
-      { userId: user.id, role: user.role, name: user.name, email: user.email, image: user.image, regNo: user.regNo || null },
+      { userId: user.id, role: user.role, name: user.name, email: user.email, image: user.image },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
 
     res.json({
       token,
-      user: { id: user.id, name: user.name, email: user.email, regNo: user.regNo || null, role: user.role, image: user.image, isGhost: false },
+      user: { id: user.id, name: user.name, email: user.email, regNo: null, role: user.role, image: user.image, isGhost: false },
     });
   } catch (error) {
     console.error('[Login] Error:', error);
@@ -341,8 +341,8 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 // ─────────────────────────────────────────────────────────────
 router.get('/me', requireAuth, async (req: Request, res: Response): Promise<void> => {
   const userId = req.user!.userId;
-  const [rows] = await pool.query<Pick<DbUser, 'id' | 'name' | 'email' | 'regNo' | 'role' | 'image'>>(
-    'SELECT id, name, email, regNo, role, image FROM User WHERE id = ?',
+  const [rows] = await pool.query<Pick<DbUser, 'id' | 'name' | 'email' | 'role' | 'image'>>(
+    'SELECT id, name, email, role, image FROM User WHERE id = ?',
     [userId]
   );
   if (rows.length === 0) {
@@ -350,7 +350,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response): Promise<void
     return;
   }
   const u = rows[0];
-  res.json({ id: u.id, name: u.name, email: u.email, regNo: u.regNo || null, role: u.role, image: u.image, isGhost: false });
+  res.json({ id: u.id, name: u.name, email: u.email, regNo: null, role: u.role, image: u.image, isGhost: false });
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -520,12 +520,12 @@ router.post('/google', async (req: Request, res: Response): Promise<void> => {
     }
 
     const token = jwt.sign(
-      { userId: user.id, role: user.role, name: user.name, email: user.email, image: user.image, regNo: user.regNo || null },
+      { userId: user.id, role: user.role, name: user.name, email: user.email, image: user.image },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
 
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email, regNo: user.regNo || null, role: user.role, image: user.image, isGhost: false } });
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, regNo: null, role: user.role, image: user.image, isGhost: false } });
   } catch (error) {
     console.error('[Google Sign-In] Error:', error);
     res.status(500).json({ error: 'Google sign-in failed' });
