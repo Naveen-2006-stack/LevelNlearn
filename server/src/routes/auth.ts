@@ -542,6 +542,9 @@ router.post('/google', async (req: Request, res: Response): Promise<void> => {
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, regNo: null, role: user.role, image: user.image, isGhost: false } });
   } catch (error) {
     console.error('[Google Sign-In] Error:', error);
-    res.status(500).json({ error: 'Google sign-in failed' });
+    res.status(500).json({
+      error: 'Google sign-in failed',
+      detail: error instanceof Error ? error.message : String(error),
+    });
   }
 });

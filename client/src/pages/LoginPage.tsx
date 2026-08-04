@@ -67,7 +67,9 @@ export default function LoginPage() {
       login(res.data.token, res.data.user as Parameters<typeof login>[1]);
       navigate(safeNext, { replace: true });
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Google sign-in failed');
+      const serverError = err?.response?.data?.error;
+      const serverDetail = err?.response?.data?.detail;
+      setError(serverDetail ? `${serverError || 'Google sign-in failed'}: ${serverDetail}` : serverError || 'Google sign-in failed');
     }
   }
 
