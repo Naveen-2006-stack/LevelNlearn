@@ -26,7 +26,10 @@ export const pool = {
       finalSql = finalSql.replace(regex, `"${table}"`);
     }
 
-    // 3. Replace MySQL parameter placeholders '?' with PostgreSQL '$1', '$2', etc.
+    // 3. Wrap camelCase column names in double quotes (prevents case folding to lowercase in PostgreSQL)
+    finalSql = finalSql.replace(/(?<!")\b([a-z]+[A-Z][a-zA-Z]*)\b(?!")/g, '"$1"');
+
+    // 4. Replace MySQL parameter placeholders '?' with PostgreSQL '$1', '$2', etc.
     let paramCount = 0;
     finalSql = finalSql.replace(/\?/g, () => {
       paramCount++;
