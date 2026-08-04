@@ -91,7 +91,7 @@ async function createGoogleUser(input: { id: string; name: string; email: string
       id: input.id,
       name: input.name,
       email: input.email,
-      role: 'STUDENT',
+      role: 'TEACHER',
       image: input.image,
       emailVerified: new Date().toISOString(),
     }),
@@ -101,6 +101,16 @@ async function createGoogleUser(input: { id: string; name: string; email: string
     throw new Error('Supabase did not return the created user.');
   }
   return user;
+}
+
+async function promoteGoogleUserToTeacher(id: string): Promise<void> {
+  await supabaseRest(`/rest/v1/User?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: {
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({ role: 'TEACHER' }),
+  });
 }
 
 function loginKey(ip: string | undefined, email: string): string {
@@ -589,6 +599,13 @@ router.post('/google', async (req: Request, res: Response): Promise<void> => {
         console.error('[Google Sign-In] User insert error:', insertError);
         res.status(500).json({ error: 'Google sign-in failed while creating the user record.' });
         return;
+      }
+    } else if (user.role !== 'TEACHER') {
+      try {
+        await promoteGoogleUserToTeacher(user.id);
+        user = { ...user, role: 'TEACHER' };
+      } catch (promoteError) {
+        console.error('[Google Sign-In] Failed to promote user to teacher:', promoteError);
       }
     }
 
