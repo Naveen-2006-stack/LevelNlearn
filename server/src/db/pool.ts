@@ -1,16 +1,37 @@
-import mysql from 'mysql2/promise';
+import pg from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-export const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  port: Number(process.env.DB_PORT) || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'levelnlearn',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  timezone: '+00:00',
+const connectionString = process.env.DATABASE_URL || `postgresql://${process.env.DB_USER || 'postgres'}:${process.env.DB_PASSWORD || ''}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME || 'postgres'}`;
+
+const pgPool = new pg.Pool({
+  connectionString,
+  ssl: connectionString.includes('supabase') || connectionString.includes('co') ? { rejectUnauthorized: false } : undefined
 });
+
+export const pool = {
+  async query<T = any>(sql: string, params?: any[]): Promise<[T[], any]> {
+    // 1. Replace MySQL backticks `...` with Postgres double quotes "..."
+    let finalSql = sql.replace(/`/g, '"');
+
+    // 2. Replace MySQL parameter placeholders '?' with PostgreSQL '$1', '$2', etc.
+    let paramCount = 0;
+    finalSql = finalSql.replace(/\?/g, () => {
+      paramCount++;
+      return `$${paramCount}`;
+    });
+
+    try {
+      const res = await pgPool.query(finalSql, params);
+      return [res.rows as unknown as T[], null];
+    } catch (error) {
+      console.error('[DB Query Error]', { sql, finalSql, params, error });
+      throw error;
+    }
+  },
+
+  async end() {
+    await pgPool.end();
+  }
+};
