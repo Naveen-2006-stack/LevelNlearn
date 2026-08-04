@@ -491,7 +491,15 @@ router.post('/google', async (req: Request, res: Response): Promise<void> => {
   }
 
   try {
-    const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID || undefined });
+    let ticket;
+    try {
+      ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID || undefined });
+    } catch (verifyError) {
+      console.error('[Google Sign-In] Token verification error:', verifyError);
+      res.status(401).json({ error: 'Google token verification failed. Check your OAuth client ID and authorized origin.' });
+      return;
+    }
+
     const payload = ticket.getPayload();
     if (!payload || !payload.email) {
       res.status(400).json({ error: 'Invalid Google token' });
@@ -507,10 +515,16 @@ router.post('/google', async (req: Request, res: Response): Promise<void> => {
     if (!user) {
       const id = uuidv4();
       // Create user and mark email as verified
-      await pool.query(
-        'INSERT INTO User (id, name, email, role, image, emailVerified) VALUES (?, ?, ?, ?, ?, ?)',
-        [id, name, email, 'STUDENT', image, new Date()]
-      );
+      try {
+        await pool.query(
+          'INSERT INTO User (id, name, email, role, image, emailVerified) VALUES (?, ?, ?, ?, ?, ?)',
+          [id, name, email, 'STUDENT', image, new Date()]
+        );
+      } catch (insertError) {
+        console.error('[Google Sign-In] User insert error:', insertError);
+        res.status(500).json({ error: 'Google sign-in failed while creating the user record.' });
+        return;
+      }
       user = await findUserByEmail(email);
     }
 
