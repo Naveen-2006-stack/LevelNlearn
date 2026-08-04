@@ -51,6 +51,7 @@ const privateLanRegex = /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.
 
 // ── Security headers ─────────────────────────────────────────────────────────
 app.use(helmet({
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   contentSecurityPolicy: {
     useDefaults: false,
