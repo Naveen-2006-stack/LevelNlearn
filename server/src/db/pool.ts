@@ -15,7 +15,18 @@ export const pool = {
     // 1. Replace MySQL backticks `...` with Postgres double quotes "..."
     let finalSql = sql.replace(/`/g, '"');
 
-    // 2. Replace MySQL parameter placeholders '?' with PostgreSQL '$1', '$2', etc.
+    // 2. Wrap table names in double quotes if not already quoted (prevents collisions with reserved keywords like User)
+    const tableNames = [
+      'User', 'Account', 'Session', 'VerificationToken', 
+      'Quiz', 'Question', 'LiveSession', 'Participant', 
+      'StudentResponse', 'Violation', 'Feedback'
+    ];
+    for (const table of tableNames) {
+      const regex = new RegExp(`(?<!")\\b${table}\\b(?!")`, 'g');
+      finalSql = finalSql.replace(regex, `"${table}"`);
+    }
+
+    // 3. Replace MySQL parameter placeholders '?' with PostgreSQL '$1', '$2', etc.
     let paramCount = 0;
     finalSql = finalSql.replace(/\?/g, () => {
       paramCount++;
