@@ -285,36 +285,37 @@ async function uploadToSupabaseStorage(
   filePath: string,
   fileBuffer: Buffer,
   mimeType: string
-): Promise<string | null> {
-  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '').replace(/\/$/, '');
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+): Promise<string> {
+  const supabaseUrl = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
+  const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-  if (!supabaseUrl || !supabaseKey) return null;
-
-  try {
-    const endpoint = `${supabaseUrl}/storage/v1/object/${bucketName}/${filePath}`;
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        'Content-Type': mimeType,
-        'x-upsert': 'true',
-      },
-      body: fileBuffer,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.warn(`[Supabase Storage] Upload failed (${response.status}): ${errorText}`);
-      return null;
-    }
-
-    return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${filePath}`;
-  } catch (err: any) {
-    console.warn('[Supabase Storage] Network/Storage upload error:', err?.message || err);
-    return null;
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase Storage environment variables (SUPABASE_URL / SUPABASE_ANON_KEY) are missing.');
   }
+
+  const endpoint = `${supabaseUrl}/storage/v1/object/${bucketName}/${filePath}`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      'Content-Type': mimeType,
+      'x-upsert': 'true',
+    },
+    body: fileBuffer,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    let detailMsg = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      detailMsg = parsed.message || parsed.error || errorText;
+    } catch { /* use raw text */ }
+    throw new Error(`Supabase Storage Error: ${detailMsg}`);
+  }
+
+  return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${filePath}`;
 }
 
 // Upload question image
@@ -337,14 +338,29 @@ router.post('/:id/questions/:qId/image', async (req: Request, res: Response) => 
     const base64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
     const fileBuffer = Buffer.from(base64, 'base64');
 
-    // 1. Try Supabase Storage upload first
-    let url: string | null = await uploadToSupabaseStorage('quiz-images', `${id}/${fileName}`, fileBuffer, mimeType);
+    const hasStorageVars = Boolean(
+      (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL) &&
+      (process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+    );
 
-    // 2. Fall back to local file storage if Supabase Storage is not configured or fails
+    let url: string | null = null;
+
+    if (hasStorageVars) {
+      try {
+        url = await uploadToSupabaseStorage('quiz-images', `${id}/${fileName}`, fileBuffer, mimeType);
+      } catch (error: any) {
+        console.error("Supabase Storage Error:", error);
+        if (process.env.VERCEL) {
+          return res.status(500).json({ error: error?.message || "Storage upload failed" });
+        }
+        console.warn('[Image Upload] Local file system fallback engaged because Supabase Storage threw an error.');
+      }
+    }
+
+    // 2. Fall back to local file storage if Supabase Storage is not configured or failed locally
     if (!url) {
       if (process.env.VERCEL) {
-        res.status(500).json({ error: 'Storage provider unavailable. Please configure Supabase Storage bucket (quiz-images).' });
-        return;
+        return res.status(500).json({ error: "Storage environment variables (SUPABASE_URL/SUPABASE_ANON_KEY) or Supabase bucket ('quiz-images') not properly configured." });
       }
 
       try {
@@ -354,8 +370,7 @@ router.post('/:id/questions/:qId/image', async (req: Request, res: Response) => 
         url = `/uploads/quizzes/${id}/${fileName}`;
       } catch (fsErr: any) {
         console.error('[Image Upload] Local file system write error:', fsErr);
-        res.status(500).json({ error: 'Failed to save image file to disk.' });
-        return;
+        return res.status(500).json({ error: 'Failed to save image file to disk.' });
       }
     }
 
@@ -366,9 +381,9 @@ router.post('/:id/questions/:qId/image', async (req: Request, res: Response) => 
     }
 
     res.json({ url });
-  } catch (err: any) {
-    console.error('[Image Upload Route Error]', err);
-    res.status(500).json({ error: err?.message || 'Failed to save quiz' });
+  } catch (error: any) {
+    console.error("Supabase Storage Error:", error);
+    return res.status(500).json({ error: error?.message || "Storage upload failed" });
   }
 });
 
