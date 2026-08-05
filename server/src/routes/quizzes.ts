@@ -37,14 +37,29 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+function parseToggleToInt(val: any, defaultVal: number = 0): number {
+  if (val === true || val === 'true' || val === 1 || val === '1') return 1;
+  if (val === false || val === 'false' || val === 0 || val === '0') return 0;
+  return defaultVal;
+}
+
 // Create quiz
 router.post('/', async (req: Request, res: Response) => {
   try {
+    const rawTimerValue = req.body?.timer_based_scoring ?? req.body?.timer_based_marking ?? req.body?.timerBasedMarking;
+    const rawTestModeValue = req.body?.test_mode ?? req.body?.testMode;
+
+    const mappedBody = {
+      ...req.body,
+      timer_based_marking: parseToggleToInt(rawTimerValue, 1),
+      test_mode: parseToggleToInt(rawTestModeValue, 0),
+    };
+
     const schema = z.object({
       title: z.string().min(1).default('Untitled Quiz'),
       description: z.string().nullable().optional(),
-      timer_based_marking: z.union([z.boolean(), z.number()]).transform(v => Boolean(v)).optional(),
-      test_mode: z.union([z.boolean(), z.number()]).transform(v => Boolean(v)).optional(),
+      timer_based_marking: z.union([z.boolean(), z.number(), z.string()]).transform(v => parseToggleToInt(v, 1)).default(1),
+      test_mode: z.union([z.boolean(), z.number(), z.string()]).transform(v => parseToggleToInt(v, 0)).default(0),
       questions: z.array(z.object({
         id: z.string(),
         question_text: z.string(),
@@ -57,12 +72,12 @@ router.post('/', async (req: Request, res: Response) => {
         _isNew: z.boolean().optional(),
       })).optional(),
     });
-    const data = schema.parse(req.body);
+    const data = schema.parse(mappedBody);
     const id = uuidv4();
     const teacherId = req.user!.userId;
     await pool.query(
       'INSERT INTO Quiz (id, teacherId, title, description, timerBasedMarking, testMode) VALUES (?, ?, ?, ?, ?, ?)',
-      [id, teacherId, data.title, data.description || '', data.timer_based_marking ?? 1, data.test_mode ?? 0]
+      [id, teacherId, data.title, data.description || '', data.timer_based_marking, data.test_mode]
     );
 
     if (data.questions?.length) {
@@ -152,11 +167,20 @@ router.put('/:id', async (req: Request, res: Response) => {
       return;
     }
 
+    const rawTimerValue = req.body?.timer_based_scoring ?? req.body?.timer_based_marking ?? req.body?.timerBasedMarking;
+    const rawTestModeValue = req.body?.test_mode ?? req.body?.testMode;
+
+    const mappedBody = {
+      ...req.body,
+      timer_based_marking: parseToggleToInt(rawTimerValue, 1),
+      test_mode: parseToggleToInt(rawTestModeValue, 0),
+    };
+
     const schema = z.object({
       title: z.string().min(1),
       description: z.string().nullable().optional(),
-      timer_based_marking: z.union([z.boolean(), z.number()]).transform(v => Boolean(v)).optional(),
-      test_mode: z.union([z.boolean(), z.number()]).transform(v => Boolean(v)).optional(),
+      timer_based_marking: z.union([z.boolean(), z.number(), z.string()]).transform(v => parseToggleToInt(v, 1)).default(1),
+      test_mode: z.union([z.boolean(), z.number(), z.string()]).transform(v => parseToggleToInt(v, 0)).default(0),
       questions: z.array(z.object({
         id: z.string(),
         question_text: z.string(),
@@ -170,14 +194,14 @@ router.put('/:id', async (req: Request, res: Response) => {
       })).optional(),
     });
 
-    const data = schema.parse(req.body);
+    const data = schema.parse(mappedBody);
     if (!Array.isArray(data.questions) || data.questions.length === 0) {
       res.status(400).json({ error: 'Quiz must have at least one question' });
       return;
     }
     await pool.query(
       'UPDATE Quiz SET title = ?, description = ?, timerBasedMarking = ?, testMode = ? WHERE id = ?',
-      [data.title, data.description || '', data.timer_based_marking ?? 1, data.test_mode ?? 0, id]
+      [data.title, data.description || '', data.timer_based_marking, data.test_mode, id]
     );
 
     if (data.questions) {
