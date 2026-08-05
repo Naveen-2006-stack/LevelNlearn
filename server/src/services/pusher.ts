@@ -1,9 +1,9 @@
 import Pusher from 'pusher';
 
 const PUSHER_APP_ID = process.env.PUSHER_APP_ID || '';
-const PUSHER_KEY = process.env.PUSHER_KEY || '';
+const PUSHER_KEY = process.env.PUSHER_KEY || process.env.NEXT_PUBLIC_PUSHER_APP_KEY || '';
 const PUSHER_SECRET = process.env.PUSHER_SECRET || '';
-const PUSHER_CLUSTER = process.env.PUSHER_CLUSTER || '';
+const PUSHER_CLUSTER = process.env.PUSHER_CLUSTER || process.env.NEXT_PUBLIC_PUSHER_CLUSTER || '';
 
 const isPusherConfigured =
   PUSHER_APP_ID.length > 0 &&

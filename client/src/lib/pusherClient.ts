@@ -1,7 +1,7 @@
 import PusherClient from 'pusher-js';
 
-const PUSHER_KEY = import.meta.env.VITE_PUSHER_KEY || '';
-const PUSHER_CLUSTER = import.meta.env.VITE_PUSHER_CLUSTER || 'ap2';
+const PUSHER_KEY = import.meta.env.VITE_PUSHER_KEY || import.meta.env.NEXT_PUBLIC_PUSHER_APP_KEY || '';
+const PUSHER_CLUSTER = import.meta.env.VITE_PUSHER_CLUSTER || import.meta.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'ap2';
 
 // If Pusher is not configured, create a no-op stub so the app doesn't crash.
 const createNoOpPusher = (): PusherClient => {
