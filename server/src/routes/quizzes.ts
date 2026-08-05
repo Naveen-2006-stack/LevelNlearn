@@ -226,36 +226,96 @@ router.delete('/:id/questions/:qId', async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+async function uploadToSupabaseStorage(
+  bucketName: string,
+  filePath: string,
+  fileBuffer: Buffer,
+  mimeType: string
+): Promise<string | null> {
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '').replace(/\/$/, '');
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+
+  if (!supabaseUrl || !supabaseKey) return null;
+
+  try {
+    const endpoint = `${supabaseUrl}/storage/v1/object/${bucketName}/${filePath}`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': mimeType,
+        'x-upsert': 'true',
+      },
+      body: fileBuffer,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn(`[Supabase Storage] Upload failed (${response.status}): ${errorText}`);
+      return null;
+    }
+
+    return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${filePath}`;
+  } catch (err) {
+    console.warn('[Supabase Storage] Network/Storage upload error:', err);
+    return null;
+  }
+}
+
 // Upload question image
 router.post('/:id/questions/:qId/image', async (req: Request, res: Response) => {
-  const id = String(req.params.id || '');
-  const qId = String(req.params.qId || '');
-  const schema = z.object({ base64Data: z.string(), mimeType: z.string() });
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: 'Invalid body' }); return; }
-
-  const [rows] = await pool.query<any[]>('SELECT teacherId FROM Quiz WHERE id = ?', [id]);
-  if ((rows as any[]).length === 0 || (rows as any[])[0].teacherId !== req.user!.userId) {
-    res.status(403).json({ error: 'Unauthorized' }); return;
-  }
-
-  const { base64Data, mimeType } = parsed.data;
-  const ext = mimeType.split('/')[1] || 'png';
-  const fileName = `${qId}-${Date.now()}.${ext}`;
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'quizzes', id);
-  fs.mkdirSync(uploadDir, { recursive: true });
-
-  const base64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
-  fs.writeFileSync(path.join(uploadDir, fileName), Buffer.from(base64, 'base64'));
-
-  const url = `/uploads/quizzes/${id}/${fileName}`;
   try {
-    await pool.query('UPDATE Question SET imageUrl = ? WHERE id = ? AND quizId = ?', [url, qId, id]);
-  } catch (e) {
-    // ignore DB update errors but still return the file URL
-  }
+    const id = String(req.params.id || '');
+    const qId = String(req.params.qId || '');
+    const schema = z.object({ base64Data: z.string(), mimeType: z.string() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: 'Invalid request body.' }); return; }
 
-  res.json({ url });
+    const [rows] = await pool.query<any[]>('SELECT teacherId FROM Quiz WHERE id = ?', [id]);
+    if ((rows as any[]).length === 0 || (rows as any[])[0].teacherId !== req.user!.userId) {
+      res.status(403).json({ error: 'Unauthorized.' }); return;
+    }
+
+    const { base64Data, mimeType } = parsed.data;
+    const ext = mimeType.split('/')[1] || 'png';
+    const fileName = `${qId}-${Date.now()}.${ext}`;
+    const base64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+    const fileBuffer = Buffer.from(base64, 'base64');
+
+    // 1. Try Supabase Storage upload first
+    let url: string | null = await uploadToSupabaseStorage('quiz-images', `${id}/${fileName}`, fileBuffer, mimeType);
+
+    // 2. Fall back to local file storage if Supabase Storage is not configured or fails
+    if (!url) {
+      if (process.env.VERCEL) {
+        res.status(500).json({ error: 'Storage provider unavailable. Please configure Supabase Storage bucket (quiz-images).' });
+        return;
+      }
+
+      try {
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'quizzes', id);
+        fs.mkdirSync(uploadDir, { recursive: true });
+        fs.writeFileSync(path.join(uploadDir, fileName), fileBuffer);
+        url = `/uploads/quizzes/${id}/${fileName}`;
+      } catch (fsErr: any) {
+        console.error('[Image Upload] Local file system write error:', fsErr);
+        res.status(500).json({ error: 'Failed to save image file to disk.' });
+        return;
+      }
+    }
+
+    try {
+      await pool.query('UPDATE Question SET imageUrl = ? WHERE id = ? AND quizId = ?', [url, qId, id]);
+    } catch (e) {
+      // ignore DB update errors but still return the file URL
+    }
+
+    res.json({ url });
+  } catch (err: any) {
+    console.error('[Image Upload Route Error]', err);
+    res.status(500).json({ error: err?.message || 'Unexpected server error during image upload.' });
+  }
 });
 
 export default router;

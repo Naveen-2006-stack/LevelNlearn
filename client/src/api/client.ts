@@ -68,8 +68,24 @@ export const quizApi = {
   remove: (id: string) => api.delete(`/api/quizzes/${id}`),
   deleteQuestion: (quizId: string, qId: string) =>
     api.delete(`/api/quizzes/${quizId}/questions/${qId}`),
-  uploadImage: (quizId: string, qId: string, base64Data: string, mimeType: string) =>
-    api.post<{ url: string }>(`/api/quizzes/${quizId}/questions/${qId}/image`, { base64Data, mimeType }),
+  uploadImage: (quizId: string, qId: string, base64Data: string, mimeType: string) => {
+    const raw = localStorage.getItem('auth-storage');
+    let token: string | null = null;
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        token = parsed?.state?.token || null;
+      } catch { /* ignore */ }
+    }
+    if (!token) {
+      return Promise.reject(new Error('Authentication token missing. Please sign in to upload images.'));
+    }
+    return api.post<{ url: string }>(
+      `/api/quizzes/${quizId}/questions/${qId}/image`,
+      { base64Data, mimeType },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+  },
 };
 
 // ─── Sessions ───────────────────────────────────────────

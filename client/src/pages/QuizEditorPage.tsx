@@ -140,25 +140,39 @@ export default function QuizEditorPage() {
     setQuestions(updated);
   };
 
+  const readFileAsDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read image file.'));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const uploadQuestionImageLocal = async (qIndex: number, file?: File | null) => {
     const q = questions[qIndex];
     if (!q || !file) return;
-    if (!file.type.startsWith('image/')) { setSaveStatus({ type: 'error', message: `Question ${qIndex + 1}: please upload a valid image file.` }); return; }
-    if (file.size > 5 * 1024 * 1024) { setSaveStatus({ type: 'error', message: `Question ${qIndex + 1}: image must be 5MB or less.` }); return; }
+    if (!file.type.startsWith('image/')) {
+      setSaveStatus({ type: 'error', message: `Question ${qIndex + 1}: please upload a valid image file.` });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setSaveStatus({ type: 'error', message: `Question ${qIndex + 1}: image must be 5MB or less.` });
+      return;
+    }
+
     setUploadingQuestionId(q.id);
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64Data = reader.result as string;
-        const res = await quizApi.uploadImage(quizId!, q.id, base64Data, file.type);
-        updateQuestion(qIndex, 'image_url', res.data.url);
-        setSaveStatus({ type: 'success', message: `Question ${qIndex + 1}: image uploaded.` });
-        setTimeout(() => setSaveStatus(null), 2500);
-        setUploadingQuestionId(null);
-      };
-      reader.readAsDataURL(file);
+      const base64Data = await readFileAsDataURL(file);
+      const res = await quizApi.uploadImage(quizId!, q.id, base64Data, file.type);
+      updateQuestion(qIndex, 'image_url', res.data.url);
+      setSaveStatus({ type: 'success', message: `Question ${qIndex + 1}: image uploaded.` });
+      setTimeout(() => setSaveStatus(null), 2500);
     } catch (err: any) {
-      setSaveStatus({ type: 'error', message: err?.response?.data?.error || `Question ${qIndex + 1}: failed to upload image.` });
+      const errMsg = err?.response?.data?.error || err?.message || `Question ${qIndex + 1}: failed to upload image.`;
+      console.error('Image upload error:', err?.message || err);
+      setSaveStatus({ type: 'error', message: errMsg });
+    } finally {
       setUploadingQuestionId(null);
     }
   };
