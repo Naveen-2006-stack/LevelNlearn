@@ -242,7 +242,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
       quiz: { title: session.quizTitle, questions },
       participants: (pRows as any[]).map((p) => ({
         id: p.id, sessionId: p.sessionId, deviceUuid: p.deviceUuid,
-        displayName: p.displayName, regNo: p.regNo, score: p.score, streak: p.streak,
+        displayName: p.displayName, score: p.score, streak: p.streak,
         cheatFlags: p.cheatFlags, lastActive: p.lastActive, joinedAt: p.joinedAt,
       })),
     });
@@ -259,7 +259,7 @@ router.post('/:id/join', async (req: Request, res: Response) => {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: 'Invalid request payload' }); return; }
 
-    const { joinCode, displayName, regNo, deviceUuid, consentAt } = parsed.data;
+    const { joinCode, displayName, deviceUuid, consentAt } = parsed.data;
     const [rows] = await pool.query<DbLiveSession>(
       'SELECT * FROM LiveSession WHERE joinCode = ?',
       [joinCode.toUpperCase()]
@@ -275,27 +275,26 @@ router.post('/:id/join', async (req: Request, res: Response) => {
 
     let participant: DbParticipant;
     const consentDate = consentAt ? new Date(consentAt) : null;
-    const normalizedRegNo = regNo?.trim().toUpperCase() || null;
 
     if (existing.length > 0) {
       await pool.query(
-        'UPDATE Participant SET displayName = ?, regNo = ?, lastActive = NOW(), consentAt = ? WHERE id = ?',
-        [displayName, normalizedRegNo, consentDate, existing[0].id]
+        'UPDATE Participant SET displayName = ?, lastActive = NOW(), consentAt = ? WHERE id = ?',
+        [displayName, consentDate, existing[0].id]
       );
       const [updated] = await pool.query<DbParticipant>('SELECT * FROM Participant WHERE id = ?', [existing[0].id]);
       participant = updated[0];
     } else {
       const pId = uuidv4();
       await pool.query(
-        'INSERT INTO Participant (id, sessionId, deviceUuid, displayName, regNo, consentAt) VALUES (?, ?, ?, ?, ?, ?)',
-        [pId, session.id, deviceUuid, displayName, normalizedRegNo, consentDate]
+        'INSERT INTO Participant (id, sessionId, deviceUuid, displayName, consentAt) VALUES (?, ?, ?, ?, ?)',
+        [pId, session.id, deviceUuid, displayName, consentDate]
       );
       const [inserted] = await pool.query<DbParticipant>('SELECT * FROM Participant WHERE id = ?', [pId]);
       participant = inserted[0];
     }
 
     await triggerEvent(`session-${session.id}`, 'participant-join', {
-      id: participant.id, display_name: participant.displayName, regNo: participant.regNo,
+      id: participant.id, display_name: participant.displayName,
       score: participant.score, streak: participant.streak,
       cheat_flags: participant.cheatFlags, device_uuid: participant.deviceUuid,
     });
