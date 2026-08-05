@@ -33,8 +33,8 @@ function generateSecureToken(): string {
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
-const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '').replace(/\/$/, '');
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 
 type SupabaseGoogleUser = {
   id: string;
@@ -52,7 +52,7 @@ function hasSupabaseRestConfig(): boolean {
 
 async function supabaseRest<T>(path: string, init?: RequestInit): Promise<T> {
   if (!hasSupabaseRestConfig()) {
-    throw new Error('SUPABASE_URL and SUPABASE_ANON_KEY must be set for Google sign-in.');
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set for Google sign-in.');
   }
 
   const response = await fetch(`${SUPABASE_URL}${path}`, {
