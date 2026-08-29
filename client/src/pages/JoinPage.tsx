@@ -5,6 +5,7 @@ import { Loader2, ShieldAlert } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { sessionApi, authApi } from '../api/client';
 import { setPersistedLiveQuizSession } from '../lib/liveQuizSession';
+import LogoMark from '../components/LogoMark';
 
 export default function JoinPage() {
   const navigate = useNavigate();
@@ -126,8 +127,8 @@ export default function JoinPage() {
         className="w-full max-w-md bg-white dark:bg-slate-800 rounded-[2rem] p-8 shadow-2xl shadow-indigo-500/10 dark:shadow-none border border-gray-100 dark:border-white/10"
       >
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 -mt-16 shadow-xl shadow-indigo-600/30 transform -rotate-3">
-            <span className="text-white font-bold text-4xl">L</span>
+          <div className="mx-auto mb-4 -mt-16 w-16 h-16 rounded-2xl overflow-hidden shadow-xl shadow-indigo-600/30 transform -rotate-3">
+            <LogoMark size="lg" className="w-full h-full" />
           </div>
           <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white mb-2">LevelNLearn</h1>
           <p className="text-slate-500 dark:text-slate-400">Join the live session</p>
